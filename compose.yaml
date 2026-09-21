@@ -1,0 +1,19 @@
+services:
+  upm:
+    build:
+      context: .
+      args:
+        UPM_UID: ${UPM_UID:-1000}   # must own secrets/id_ed25519 (chmod 600)
+    ports:
+      - "${BIND:-127.0.0.1}:8080:8080"   # set BIND to the LAN IP to expose
+    env_file: .env
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - upm-data:/data
+      - ./secrets/id_ed25519:/run/secrets/upm_ssh_key:ro
+      - ./components.json:/app/components.json:ro
+    restart: unless-stopped
+volumes:
+  upm-data: {}

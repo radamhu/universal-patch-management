@@ -1,0 +1,9 @@
+{
+  "sources": {
+    "proxmox": {"source": "endoflife", "product": "proxmox-ve"},
+    "os:ubuntu": {"source": "endoflife", "product": "ubuntu", "lts": true, "field": "cycle"},
+    "os:debian": {"source": "endoflife", "product": "debian", "field": "cycle"},
+    "app:grafana/alloy": {"source": "github_release", "repo": "grafana/alloy"}
+  },
+  "probes": []
+}
