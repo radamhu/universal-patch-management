@@ -20,7 +20,9 @@ class SshRunner:
         try:
             p = self._run(args, capture_output=True, text=True, timeout=self._timeout)
         except subprocess.TimeoutExpired:
-            raise SshError(f"ssh {host} timed out")
+            raise SshError(f"ssh {host} timed out") from None
+        except OSError as exc:
+            raise SshError(f"ssh {host} failed to start: {exc}") from None
         if p.returncode != 0:
             raise SshError(f"ssh {host} exit {p.returncode}: {p.stderr.strip()[:200]}")
         return p.stdout

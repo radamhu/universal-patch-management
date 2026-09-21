@@ -31,3 +31,10 @@ def test_timeout_raises():
         raise subprocess.TimeoutExpired(args, 20)
     with pytest.raises(SshError, match="timed out"):
         SshRunner("/k", "/kh", run=fake).run("u", "h", "x")
+
+
+def test_oserror_raises():
+    def fake(args, **kw):
+        raise FileNotFoundError("ssh: not found")
+    with pytest.raises(SshError, match="failed to start"):
+        SshRunner("/k", "/kh", run=fake).run("u", "h", "x")
