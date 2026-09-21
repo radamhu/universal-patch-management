@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patch Status</title>
+<style>
+  :root { --bg:#f6f7f9; --fg:#1b1f24; --card:#fff; --line:#dde1e6; --muted:#5b6672;
+          --ok:#1a7f37; --warn:#9a6700; --bad:#cf222e; --unk:#57606a; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0d1117; --fg:#e6edf3; --card:#161b22; --line:#30363d; --muted:#8b949e;
+            --ok:#3fb950; --warn:#d29922; --bad:#f85149; --unk:#8b949e; } }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--fg);
+         font:14px/1.45 system-ui, sans-serif; }
+  main { max-width:960px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  h2 { font-size:16px; margin:24px 0 8px; }
+  #meta { color:var(--muted); margin-bottom:8px; }
+  #hosts span { display:inline-block; margin-right:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:8px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--muted); font-weight:600; }
+  tr:last-child td { border-bottom:0; }
+  .badge { font-weight:600; }
+  .ok { color:var(--ok); } .outdated { color:var(--warn); }
+  .error { color:var(--bad); } .unknown { color:var(--unk); }
+  #banner { color:var(--bad); margin:8px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Patch Status</h1>
+  <div id="meta"></div>
+  <div id="hosts"></div>
+  <div id="banner"></div>
+  <h2>Core Infra</h2>
+  <div class="card"><table id="core"></table></div>
+  <h2>Application</h2>
+  <div class="card"><table id="app"></table></div>
+</main>
+<script>
+const SYMBOL = { ok: "✔ ok", outdated: "▲ outdated", error: "✖ error", unknown: "? unknown" };
+const COLS = ["Component", "Host", "Kind", "Current", "Latest", "Status"];
+
+function el(tag, text, cls) {
+  const e = document.createElement(tag);
+  if (text !== undefined) e.textContent = text;
+  if (cls) e.className = cls;
+  return e;
+}
+
+function age(iso) {
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 3600) return Math.round(s / 60) + " min ago";
+  if (s < 172800) return Math.round(s / 3600) + " h ago";
+  return Math.round(s / 86400) + " d ago";
+}
+
+function renderTable(table, rows) {
+  table.replaceChildren();
+  const head = el("tr");
+  COLS.forEach(c => head.append(el("th", c)));
+  table.append(head);
+  if (!rows.length) {
+    const tr = el("tr"); const td = el("td", "No components"); td.colSpan = COLS.length;
+    tr.append(td); table.append(tr); return;
+  }
+  for (const c of rows) {
+    const tr = el("tr");
+    const isBackup = c.kind === "backup";
+    tr.append(el("td", c.name), el("td", c.host), el("td", c.kind));
+    tr.append(el("td", isBackup && c.current ? age(c.current) : (c.current ?? "-")));
+    tr.append(el("td", c.latest ?? "-"));
+    const label = SYMBOL[c.status] + (c.stale ? " (stale)" : "");
+    const td = el("td", label, "badge " + c.status);
+    if (c.error) td.title = c.error;
+    tr.append(td);
+    table.append(tr);
+  }
+}
+
+function render(doc) {
+  document.getElementById("meta").textContent = "Updated " + age(doc.generated_at);
+  const hosts = document.getElementById("hosts");
+  hosts.replaceChildren();
+  for (const [name, h] of Object.entries(doc.hosts)) {
+    const s = el("span", name + ": " + (h.ok ? "✔ ok" : "✖ " + (h.error || "error")), h.ok ? "ok" : "error");
+    hosts.append(s);
+  }
+  for (const g of ["core", "app"]) {
+    renderTable(document.getElementById(g), doc.components.filter(c => c.group === g));
+  }
+  document.getElementById("banner").textContent = "";
+}
+
+async function load() {
+  try {
+    const r = await fetch("/status.json", { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status === 503 ? "no data collected yet" : "HTTP " + r.status);
+    render(await r.json());
+  } catch (e) {
+    document.getElementById("banner").textContent = "Cannot load status: " + e.message;
+  }
+}
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>
