@@ -30,12 +30,19 @@ class ProbesCollector:
                 m = re.search(p["regex"], self._exec(p))
                 if not m:
                     raise ValueError("regex did not match output")
+                version = m.group(1)
+                if version is None:
+                    raise ValueError("regex group 1 did not match")
                 latest = resolver.latest(p["latest_key"]) if p.get("latest_key") else None
                 comps.append(version_component(
                     id=p["id"], group=p["group"], host=p["host"], kind=p["kind"],
-                    name=p["name"], current=m.group(1), latest=latest, now=now))
-            except (SshError, ValueError, re.error, IndexError, KeyError) as exc:
+                    name=p["name"], current=version, latest=latest, now=now))
+            except Exception as exc:
                 comps.append(error_component(
-                    id=p["id"], group=p["group"], host=p["host"], kind=p["kind"],
-                    name=p["name"], error=str(exc)[:200], now=now))
+                    id=p.get("id", "probe:unknown"),
+                    group=p.get("group", "app"),
+                    host=p.get("host", "unknown"),
+                    kind=p.get("kind", "unknown"),
+                    name=p.get("name", p.get("id", "unknown")),
+                    error=str(exc)[:200], now=now))
         return comps
