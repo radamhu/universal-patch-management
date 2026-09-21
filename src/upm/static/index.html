@@ -51,7 +51,10 @@ function el(tag, text, cls) {
 }
 
 function age(iso) {
-  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "unknown";
+  let s = (Date.now() - d.getTime()) / 1000;
+  if (s < 0) return "just now";
   if (s < 3600) return Math.round(s / 60) + " min ago";
   if (s < 172800) return Math.round(s / 3600) + " h ago";
   return Math.round(s / 86400) + " d ago";
@@ -72,8 +75,9 @@ function renderTable(table, rows) {
     tr.append(el("td", c.name), el("td", c.host), el("td", c.kind));
     tr.append(el("td", isBackup && c.current ? age(c.current) : (c.current ?? "-")));
     tr.append(el("td", c.latest ?? "-"));
-    const label = SYMBOL[c.status] + (c.stale ? " (stale)" : "");
-    const td = el("td", label, "badge " + c.status);
+    const label = (SYMBOL[c.status] ?? "? " + (c.status ?? "unknown")) + (c.stale ? " (stale)" : "");
+    const cls = SYMBOL[c.status] ? c.status : "unknown";
+    const td = el("td", label, "badge " + cls);
     if (c.error) td.title = c.error;
     tr.append(td);
     table.append(tr);
@@ -84,12 +88,14 @@ function render(doc) {
   document.getElementById("meta").textContent = "Updated " + age(doc.generated_at);
   const hosts = document.getElementById("hosts");
   hosts.replaceChildren();
-  for (const [name, h] of Object.entries(doc.hosts)) {
+  const hostsObj = doc.hosts && typeof doc.hosts === "object" ? doc.hosts : {};
+  for (const [name, h] of Object.entries(hostsObj)) {
     const s = el("span", name + ": " + (h.ok ? "✔ ok" : "✖ " + (h.error || "error")), h.ok ? "ok" : "error");
     hosts.append(s);
   }
+  const comps = Array.isArray(doc.components) ? doc.components : [];
   for (const g of ["core", "app"]) {
-    renderTable(document.getElementById(g), doc.components.filter(c => c.group === g));
+    renderTable(document.getElementById(g), comps.filter(c => c.group === g));
   }
   document.getElementById("banner").textContent = "";
 }

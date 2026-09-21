@@ -19,6 +19,7 @@ def srv(tmp_path):
     threading.Thread(target=s.serve_forever, daemon=True).start()
     yield store, f"http://127.0.0.1:{s.server_address[1]}"
     s.shutdown()
+    s.server_close()
 
 
 def get(url):
@@ -51,3 +52,20 @@ def test_status_and_health(srv):
 
 def test_404(srv):
     assert get(srv[1] + "/nope")[0] == 404
+
+
+def test_healthz_missing_generated_at(srv):
+    store, base = srv
+    store.save({"hosts": {}, "components": []})
+    assert get(base + "/healthz")[0] == 503
+
+
+def test_index_html_route(srv):
+    _, base = srv
+    status, body = get(base + "/index.html")
+    assert status == 200 and b"Core Infra" in body
+
+
+def test_traversal_attack(srv):
+    _, base = srv
+    assert get(base + "/../server.py")[0] == 404
