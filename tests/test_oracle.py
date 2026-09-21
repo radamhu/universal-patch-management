@@ -1,3 +1,4 @@
+import pytest
 from fakes import NOW, FakeResolver
 from upm.collectors.oracle import OracleCollector, parse_os_release, split_image
 from upm.ssh import SshError
@@ -43,6 +44,7 @@ def test_collect_all():
     assert by_id["oracle:docker:alloy"].current == "v1.3.0"
     assert by_id["oracle:docker:alloy"].status == "outdated"
     assert by_id["oracle:docker:edge"].status == "unknown"        # tag 'latest'
+    assert by_id["oracle:backup"].status == "ok"
     assert all(c.group == "app" and c.host == "oracle" for c in comps)
 
 
@@ -56,3 +58,14 @@ def test_bad_backup_output_becomes_error_component():
         comps = OracleCollector(FakeSsh(backup=bad), "u", "h", "backup-cmd", 36).collect(FakeResolver(), NOW)
         b = next(c for c in comps if c.id == "oracle:backup")
         assert b.status == "error"
+
+
+def test_os_release_ssh_failure_raises():
+    class FailingSsh:
+        def run(self, user, host, cmd):
+            if "os-release" in cmd:
+                raise SshError("connection failed")
+            raise AssertionError(cmd)
+
+    with pytest.raises(SshError):
+        OracleCollector(FailingSsh(), "u", "h", None, 36).collect(FakeResolver(), NOW)
