@@ -56,3 +56,22 @@ def test_load_components_rejects_bad_probe(tmp_path):
     p.write_text(json.dumps({"probes": [{"id": "nope:a"}]}))
     with pytest.raises(ValueError):
         load_components(p)
+
+
+def test_pve_auth_not_in_repr():
+    s = Settings.from_env({"PVE01_HOST": "10.0.0.5", "PVE01_HOST_USER": "root@pam",
+                           "PVE01_HOST_TOKEN": "upm", "PVE01_HOST_TOKEN_SECRET": "sekret"})
+    assert "sekret" not in repr(s)
+
+
+@pytest.mark.parametrize("key,attr,default", [
+    ("POLL_INTERVAL", "poll_interval_min", 30),
+    ("BACKUP_MAX_AGE_H", "backup_max_age_h", 36),
+    ("PORT", "port", 8080),
+])
+def test_numeric_env_safe(key, attr, default):
+    assert getattr(Settings.from_env({key: ""}), attr) == default
+    assert getattr(Settings.from_env({key: "abc"}), attr) == default
+    assert getattr(Settings.from_env({key: "0"}), attr) == 1
+    assert getattr(Settings.from_env({key: "-5"}), attr) == 1
+    assert getattr(Settings.from_env({key: "7"}), attr) == 7

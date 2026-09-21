@@ -76,7 +76,7 @@ function renderTable(table, rows) {
     tr.append(el("td", isBackup && c.current ? age(c.current) : (c.current ?? "-")));
     tr.append(el("td", c.latest ?? "-"));
     const label = (SYMBOL[c.status] ?? "? " + (c.status ?? "unknown")) + (c.stale ? " (stale)" : "");
-    const cls = SYMBOL[c.status] ? c.status : "unknown";
+    const cls = c.stale ? "outdated" : (SYMBOL[c.status] ? c.status : "unknown");
     const td = el("td", label, "badge " + cls);
     if (c.error) td.title = c.error;
     tr.append(td);
@@ -85,7 +85,9 @@ function renderTable(table, rows) {
 }
 
 function render(doc) {
-  document.getElementById("meta").textContent = "Updated " + age(doc.generated_at);
+  const meta = document.getElementById("meta");
+  meta.textContent = "Updated " + age(doc.generated_at);
+  meta.title = String(doc.generated_at ?? "");
   const hosts = document.getElementById("hosts");
   hosts.replaceChildren();
   const hostsObj = doc.hosts && typeof doc.hosts === "object" ? doc.hosts : {};

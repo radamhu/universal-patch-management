@@ -10,6 +10,6 @@ ENV PYTHONPATH=/app/src PYTHONUNBUFFERED=1 DATA_DIR=/data COMPONENTS_PATH=/app/c
 RUN mkdir /data && chown upm /data
 USER upm
 EXPOSE 8080
-HEALTHCHECK --interval=60s --timeout=5s --start-period=60s \
+HEALTHCHECK --interval=60s --timeout=5s --start-period=120s \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz')"
 CMD ["python", "-m", "upm.main"]
