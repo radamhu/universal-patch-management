@@ -27,7 +27,6 @@
   .badge { font-weight:600; }
   .ok { color:var(--ok); } .outdated { color:var(--warn); }
   .error { color:var(--bad); } .unknown { color:var(--unk); }
-  .group-head { background:var(--bg); text-transform:uppercase; font-size:11px; letter-spacing:.03em; }
   #banner { color:var(--bad); margin:8px 0; }
 </style>
 </head>
@@ -95,14 +94,7 @@ function renderTable(table, rows) {
   const groups = new Map(STATUS_ORDER.map(s => [s, []]));
   for (const c of rows) groups.get(statusOf(c)).push(c);
   for (const status of STATUS_ORDER) {
-    const groupRows = groups.get(status);
-    if (!groupRows.length) continue;
-    const groupHead = el("tr");
-    const th = el("td", (SYMBOL[status] ?? status) + " (" + groupRows.length + ")", "badge group-head " + status);
-    th.colSpan = COLS.length;
-    groupHead.append(th);
-    table.append(groupHead);
-    for (const c of groupRows) {
+    for (const c of groups.get(status)) {
       const tr = el("tr");
       const isBackup = c.kind === "backup";
       tr.append(el("td", c.name), el("td", c.host), el("td", c.kind));
