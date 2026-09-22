@@ -22,7 +22,8 @@ log = logging.getLogger("upm")
 def build_collectors(s, components, ssh, pve_client):
     cols = []
     if s.pve_base_url:
-        cols.append(Pve01Collector(pve_client, s.backup_max_age_h))
+        cols.append(Pve01Collector(pve_client, s.backup_max_age_h,
+                                   ssh, s.pve_ssh_user, s.pve_hostname))
     if s.oracle_host and s.oracle_user:
         cols.append(OracleCollector(ssh, s.oracle_user, s.oracle_host,
                                     s.oracle_backup_cmd, s.backup_max_age_h))
