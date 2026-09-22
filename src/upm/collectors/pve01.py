@@ -109,14 +109,15 @@ class Pve01Collector:
                     name=name, error=str(exc)[:200], now=now))
 
             try:
+                guest_host = f"{g.get('name', vmid)} ({vmid})"
                 for line in self._docker_ps(g.get("type"), vmid, g.get("node")).splitlines():
                     if "|" not in line:
                         continue
                     cname, image = line.split("|", 1)
                     repo, tag = split_image(image)
                     comps.append(version_component(
-                        id=f"pve01:docker:{vmid}:{cname}", group="app", host=real_host,
-                        kind="docker_app", name=f"{cname} ({repo}) [{label} {vmid}]",
+                        id=f"pve01:docker:{vmid}:{cname}", group="app", host=guest_host,
+                        kind="docker_app", name=f"{cname} ({repo})",
                         current=tag, latest=resolver.latest(f"app:{repo}"), now=now))
             except Exception:
                 pass  # guest has no docker (or agent/pct exec unavailable) - not an error

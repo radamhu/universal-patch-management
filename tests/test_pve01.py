@@ -264,9 +264,11 @@ def test_vm_and_lxc_docker_apps_collected():
         FakeResolver({"os:debian": "12", "os:ubuntu": "24.04"}), NOW)
     by_id = {comp.id: comp for comp in comps}
     lxc_docker = by_id["pve01:docker:100:web"]
-    assert (lxc_docker.current, lxc_docker.group, lxc_docker.kind) == ("1.27", "app", "docker_app")
+    assert (lxc_docker.current, lxc_docker.group, lxc_docker.kind, lxc_docker.host) == \
+        ("1.27", "app", "docker_app", "web (100)")
     vm_docker = by_id["pve01:docker:101:api"]
-    assert (vm_docker.current, vm_docker.group, vm_docker.kind) == ("2.0", "app", "docker_app")
+    assert (vm_docker.current, vm_docker.group, vm_docker.kind, vm_docker.host) == \
+        ("2.0", "app", "docker_app", "db (101)")
 
 
 def test_lxc_os_without_ssh_becomes_error():
