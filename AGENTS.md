@@ -42,6 +42,19 @@ docker image prune -f --filter label=com.docker.compose.project=universal-patch-
 docker volume prune -f --filter label=com.docker.compose.project=universal-patch-management
 ```
 
+## Frontend testing (`src/upm/static/index.html`)
+
+No browser MCP tool is available in this environment (no `Claude_Browser`/chrome-extension tools). To verify
+UI changes, use headless Chrome directly — no install needed, one-shot process, nothing lingers to close:
+
+```
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --disable-gpu --no-sandbox \
+  --virtual-time-budget=4000 --screenshot=<scratchpad>/status.png --window-size=1000,1400 http://localhost:8080/
+```
+
+Then `Read` the screenshot. Delete it from the scratchpad after. `--virtual-time-budget` gives the page's
+JS (fetch to `/status.json`, render) time to run before the screenshot is taken.
+
 ## Conventions
 
 - Container runs as non-root user `upm` (`UPM_UID` build arg), filesystem is `read_only: true` — don't add

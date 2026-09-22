@@ -27,6 +27,7 @@
   .badge { font-weight:600; }
   .ok { color:var(--ok); } .outdated { color:var(--warn); }
   .error { color:var(--bad); } .unknown { color:var(--unk); }
+  .group-head { background:var(--bg); text-transform:uppercase; font-size:11px; letter-spacing:.03em; }
   #banner { color:var(--bad); margin:8px 0; }
 </style>
 </head>
@@ -76,6 +77,12 @@ function age(iso) {
   return Math.round(s / 86400) + " d ago";
 }
 
+const STATUS_ORDER = ["error", "outdated", "unknown", "ok"];
+
+function statusOf(c) {
+  return c.stale ? "outdated" : (SYMBOL[c.status] ? c.status : "unknown");
+}
+
 function renderTable(table, rows) {
   table.replaceChildren();
   const head = el("tr");
@@ -85,18 +92,28 @@ function renderTable(table, rows) {
     const tr = el("tr"); const td = el("td", "No components"); td.colSpan = COLS.length;
     tr.append(td); table.append(tr); return;
   }
-  for (const c of rows) {
-    const tr = el("tr");
-    const isBackup = c.kind === "backup";
-    tr.append(el("td", c.name), el("td", c.host), el("td", c.kind));
-    tr.append(el("td", isBackup && c.current ? age(c.current) : (c.current ?? "-")));
-    tr.append(el("td", c.latest ?? "-"));
-    const label = (SYMBOL[c.status] ?? "? " + (c.status ?? "unknown")) + (c.stale ? " (stale)" : "");
-    const cls = c.stale ? "outdated" : (SYMBOL[c.status] ? c.status : "unknown");
-    const td = el("td", label, "badge " + cls);
-    if (c.error) td.title = c.error;
-    tr.append(td);
-    table.append(tr);
+  const groups = new Map(STATUS_ORDER.map(s => [s, []]));
+  for (const c of rows) groups.get(statusOf(c)).push(c);
+  for (const status of STATUS_ORDER) {
+    const groupRows = groups.get(status);
+    if (!groupRows.length) continue;
+    const groupHead = el("tr");
+    const th = el("td", (SYMBOL[status] ?? status) + " (" + groupRows.length + ")", "badge group-head " + status);
+    th.colSpan = COLS.length;
+    groupHead.append(th);
+    table.append(groupHead);
+    for (const c of groupRows) {
+      const tr = el("tr");
+      const isBackup = c.kind === "backup";
+      tr.append(el("td", c.name), el("td", c.host), el("td", c.kind));
+      tr.append(el("td", isBackup && c.current ? age(c.current) : (c.current ?? "-")));
+      tr.append(el("td", c.latest ?? "-"));
+      const label = (SYMBOL[c.status] ?? "? " + (c.status ?? "unknown")) + (c.stale ? " (stale)" : "");
+      const td = el("td", label, "badge " + status);
+      if (c.error) td.title = c.error;
+      tr.append(td);
+      table.append(tr);
+    }
   }
 }
 
