@@ -197,11 +197,11 @@ def test_vm_os_agent_exec_sends_command_as_argv_array():
     passing a single string makes the agent try to exec a program literally named that string
     (seen in practice: 'cat /etc/os-release' as one arg -> "No such file or directory").
     """
-    seen = {}
+    seen = []
 
     def h(req):
         if req.url.path.endswith("/agent/exec"):
-            seen["command"] = httpx.QueryParams(req.read()).get_list("command")
+            seen.append(httpx.QueryParams(req.read()).get_list("command"))
             return httpx.Response(200, json={"data": {"pid": 1}})
         if req.url.path.endswith("/agent/exec-status"):
             return httpx.Response(200, json={"data": {
@@ -222,7 +222,51 @@ def test_vm_os_agent_exec_sends_command_as_argv_array():
     comps = Pve01Collector(c, 36).collect(FakeResolver({"os:ubuntu": "24.04"}), NOW)
     by_id = {comp.id: comp for comp in comps}
     assert by_id["pve01:vm_os:101"].status == "ok"
-    assert seen["command"] == ["/bin/sh", "-c", "cat /etc/os-release"]
+    assert ["/bin/sh", "-c", "cat /etc/os-release"] in seen
+
+
+def test_vm_and_lxc_docker_apps_collected():
+    """docker ps on every guest (LXC via pct exec, VM via guest agent) becomes app components."""
+    class DockerAwareSsh:
+        def __init__(self):
+            self.calls = []
+
+        def run(self, user, host, cmd):
+            self.calls.append((user, host, cmd))
+            if "docker ps" in cmd:
+                return "web|nginx:1.27\n"
+            return 'ID=debian\nVERSION_ID="12"\n'
+
+    def h(req):
+        if req.url.path.endswith("/agent/exec"):
+            cmd = httpx.QueryParams(req.read()).get_list("command")
+            h.last_is_docker = "docker ps" in cmd[-1]
+            return httpx.Response(200, json={"data": {"pid": 1}})
+        if req.url.path.endswith("/agent/exec-status"):
+            out = "api|myrepo/api:2.0\n" if h.last_is_docker else 'ID=ubuntu\nVERSION_ID="24.04"\n'
+            return httpx.Response(200, json={"data": {"exited": 1, "out-data": out}})
+        if req.url.path not in data:
+            return httpx.Response(404)
+        return httpx.Response(200, json={"data": data[req.url.path]})
+
+    data = {
+        "/api2/json/version": {"version": "8.2.4"},
+        "/api2/json/cluster/resources": [
+            {"vmid": 100, "name": "web", "type": "lxc"},
+            {"vmid": 101, "name": "db", "type": "qemu", "node": "pve01"}],
+        "/api2/json/nodes": [{"node": "pve01"}],
+        "/api2/json/cluster/backup": [],
+    }
+    ssh = DockerAwareSsh()
+    c = httpx.Client(base_url="https://pve", headers={"Authorization": "PVEAPIToken=t"},
+                     transport=httpx.MockTransport(h))
+    comps = Pve01Collector(c, 36, ssh, "root", "10.0.0.5").collect(
+        FakeResolver({"os:debian": "12", "os:ubuntu": "24.04"}), NOW)
+    by_id = {comp.id: comp for comp in comps}
+    lxc_docker = by_id["pve01:docker:100:web"]
+    assert (lxc_docker.current, lxc_docker.group, lxc_docker.kind) == ("1.27", "app", "docker_app")
+    vm_docker = by_id["pve01:docker:101:api"]
+    assert (vm_docker.current, vm_docker.group, vm_docker.kind) == ("2.0", "app", "docker_app")
 
 
 def test_lxc_os_without_ssh_becomes_error():

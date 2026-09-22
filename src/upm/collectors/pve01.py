@@ -5,6 +5,7 @@ import time
 import httpx
 
 from ..models import backup_component, error_component, version_component
+from .ssh_host import DOCKER_PS, split_image
 
 _OS_ID_RE = re.compile(r'^ID=(\S+)', re.M)
 _OS_VERSION_RE = re.compile(r'^VERSION_ID="?([\d.]+)', re.M)
@@ -65,6 +66,18 @@ class Pve01Collector:
             return self._agent_exec(node, vmid, "cat /etc/os-release")
         raise ValueError(f"unknown guest type {guest_type}")
 
+    def _docker_ps(self, guest_type, vmid, node):
+        if guest_type == "lxc":
+            if not (self._ssh and self._pve_hostname):
+                raise RuntimeError("SSH not configured for pct exec")
+            cmd = f"pct exec {vmid} -- sh -c {shlex.quote(DOCKER_PS)}"
+            return self._ssh.run(self._pve_ssh_user, self._pve_hostname, cmd)
+        if guest_type == "qemu":
+            if not node:
+                raise RuntimeError("no node for VM")
+            return self._agent_exec(node, vmid, DOCKER_PS)
+        raise ValueError(f"unknown guest type {guest_type}")
+
     def collect(self, resolver, now):
         try:
             real_host = self._get("/nodes")[0]["node"] or self.host
@@ -94,6 +107,19 @@ class Pve01Collector:
                 comps.append(error_component(
                     id=f"pve01:{kind}:{vmid}", group="core", host=real_host, kind=kind,
                     name=name, error=str(exc)[:200], now=now))
+
+            try:
+                for line in self._docker_ps(g.get("type"), vmid, g.get("node")).splitlines():
+                    if "|" not in line:
+                        continue
+                    cname, image = line.split("|", 1)
+                    repo, tag = split_image(image)
+                    comps.append(version_component(
+                        id=f"pve01:docker:{vmid}:{cname}", group="app", host=real_host,
+                        kind="docker_app", name=f"{cname} ({repo}) [{label} {vmid}]",
+                        current=tag, latest=resolver.latest(f"app:{repo}"), now=now))
+            except Exception:
+                pass  # guest has no docker (or agent/pct exec unavailable) - not an error
 
         jobs = [j for j in self._get("/cluster/backup") if str(j.get("enabled", 1)) != "0"]
         last_run = self._match_job_runs(jobs, guests)
