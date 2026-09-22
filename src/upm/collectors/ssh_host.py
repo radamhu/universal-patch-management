@@ -33,15 +33,20 @@ class SshHostCollector:
         comps = []
 
         try:
+            real_host = self._run("hostname").strip() or self.host
+        except Exception:
+            real_host = self.host
+
+        try:
             osr = parse_os_release(self._run("cat /etc/os-release"))
             comps.append(version_component(
-                id=f"{self.host}:os", group="core", host=self.host, kind="host_os",
+                id=f"{self.host}:os", group="core", host=real_host, kind="host_os",
                 name=f"OS {osr.get('PRETTY_NAME', osr.get('ID', 'unknown'))}",
                 current=osr.get("VERSION_ID"),
                 latest=resolver.latest(f"os:{osr.get('ID', '')}"), now=now))
         except Exception as exc:
             comps.append(error_component(
-                id=f"{self.host}:os", group="core", host=self.host, kind="host_os",
+                id=f"{self.host}:os", group="core", host=real_host, kind="host_os",
                 name="OS", error=str(exc)[:200], now=now))
 
         if self._docker:
@@ -52,22 +57,22 @@ class SshHostCollector:
                     name, image = line.split("|", 1)
                     repo, tag = split_image(image)
                     comps.append(version_component(
-                        id=f"{self.host}:docker:{name}", group="app", host=self.host,
+                        id=f"{self.host}:docker:{name}", group="app", host=real_host,
                         kind="docker_app", name=f"{name} ({repo})", current=tag,
                         latest=resolver.latest(f"app:{repo}"), now=now))
             except Exception as exc:
                 comps.append(error_component(
-                    id=f"{self.host}:docker", group="app", host=self.host, kind="docker_app",
+                    id=f"{self.host}:docker", group="app", host=real_host, kind="docker_app",
                     name="Docker", error=str(exc)[:200], now=now))
 
         if self._backup_cmd:
             try:
                 ts = int(self._run(self._backup_cmd).strip())
                 comps.append(backup_component(
-                    id=f"{self.host}:backup", group="app", host=self.host, name=f"Backup {self.host}",
+                    id=f"{self.host}:backup", group="app", host=real_host, name=f"Backup {self.host}",
                     last_ts=ts, max_age_h=self._max_age_h, now=now))
             except Exception as exc:
                 comps.append(error_component(
-                    id=f"{self.host}:backup", group="app", host=self.host, kind="backup",
+                    id=f"{self.host}:backup", group="app", host=real_host, kind="backup",
                     name=f"Backup {self.host}", error=str(exc)[:200], now=now))
         return comps

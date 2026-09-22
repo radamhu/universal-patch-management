@@ -97,7 +97,7 @@ function renderTable(table, rows) {
     for (const c of groups.get(status)) {
       const tr = el("tr");
       const isBackup = c.kind === "backup";
-      tr.append(el("td", c.name), el("td", c.host), el("td", c.kind));
+      tr.append(el("td", c.name), el("td", c.host, status === "ok" ? undefined : "error"), el("td", c.kind));
       tr.append(el("td", isBackup && c.current ? age(c.current) : (c.current ?? "-")));
       tr.append(el("td", c.latest ?? "-"));
       const label = (SYMBOL[c.status] ?? "? " + (c.status ?? "unknown")) + (c.stale ? " (stale)" : "");

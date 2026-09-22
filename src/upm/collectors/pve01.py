@@ -66,8 +66,13 @@ class Pve01Collector:
         raise ValueError(f"unknown guest type {guest_type}")
 
     def collect(self, resolver, now):
+        try:
+            real_host = self._get("/nodes")[0]["node"] or self.host
+        except Exception:
+            real_host = self.host
+
         comps = [version_component(
-            id="pve01:proxmox", group="core", host=self.host, kind="proxmox",
+            id="pve01:proxmox", group="core", host=real_host, kind="proxmox",
             name="Proxmox VE", current=self._get("/version")["version"],
             latest=resolver.latest("proxmox"), now=now)]
 
@@ -83,11 +88,11 @@ class Pve01Collector:
                 text = self._os_release(g.get("type"), vmid, g.get("node"))
                 os_id, version = _parse_os_release(text)
                 comps.append(version_component(
-                    id=f"pve01:{kind}:{vmid}", group="core", host=self.host, kind=kind,
+                    id=f"pve01:{kind}:{vmid}", group="core", host=real_host, kind=kind,
                     name=name, current=version, latest=resolver.latest(f"os:{os_id}"), now=now))
             except Exception as exc:
                 comps.append(error_component(
-                    id=f"pve01:{kind}:{vmid}", group="core", host=self.host, kind=kind,
+                    id=f"pve01:{kind}:{vmid}", group="core", host=real_host, kind=kind,
                     name=name, error=str(exc)[:200], now=now))
 
         jobs = [j for j in self._get("/cluster/backup") if str(j.get("enabled", 1)) != "0"]
@@ -97,7 +102,7 @@ class Pve01Collector:
             job_id = job["id"]
             label = job.get("comment") or job.get("schedule") or job_id
             comps.append(backup_component(
-                id=f"pve01:backupjob:{job_id}", group="core", host=self.host,
+                id=f"pve01:backupjob:{job_id}", group="core", host=real_host,
                 name=f"Backup job {label}",
                 last_ts=last_run.get(job_id), max_age_h=self._max_age_h, now=now))
         return comps
