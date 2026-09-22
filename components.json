@@ -5,5 +5,8 @@
     "os:debian": {"source": "endoflife", "product": "debian", "field": "cycle"},
     "app:grafana/alloy": {"source": "github_release", "repo": "grafana/alloy"}
   },
+  "hosts": [
+    {"id": "oracle", "user": "ubuntu", "address": "158.180.55.49", "docker": true, "backup_cmd": null}
+  ],
   "probes": []
 }

@@ -38,7 +38,7 @@
   <div id="banner"></div>
   <h2>Core Infra</h2>
   <h3>Host</h3>
-  <div class="card"><table id="core-proxmox"></table></div>
+  <div class="card"><table id="core-host"></table></div>
   <h3>LXC</h3>
   <div class="card"><table id="core-lxc_os"></table></div>
   <h3>VMs</h3>
@@ -48,8 +48,8 @@
   <h2>Application</h2>
   <h3>VM OS</h3>
   <div class="card"><table id="app-vm_os"></table></div>
-  <h3>Docker Apps</h3>
-  <div class="card"><table id="app-docker_app"></table></div>
+  <h3>Applications</h3>
+  <div class="card"><table id="app-applications"></table></div>
   <h3>Backups</h3>
   <div class="card"><table id="app-backup"></table></div>
   <h3>Other</h3>
@@ -112,16 +112,18 @@ function render(doc) {
     hosts.append(s);
   }
   const comps = Array.isArray(doc.components) ? doc.components : [];
-  const CORE_KINDS = ["proxmox", "lxc_os", "vm_os", "backup"];
+  function section(id, group, kinds) {
+    renderTable(document.getElementById(id),
+                comps.filter(c => c.group === group && kinds.includes(c.kind)));
+  }
+  section("core-host", "core", ["proxmox", "host_os"]);
+  section("core-lxc_os", "core", ["lxc_os"]);
+  section("core-vm_os", "core", ["vm_os"]);
+  section("core-backup", "core", ["backup"]);
   const APP_KINDS = ["vm_os", "docker_app", "backup"];
-  for (const kind of CORE_KINDS) {
-    renderTable(document.getElementById("core-" + kind),
-                comps.filter(c => c.group === "core" && c.kind === kind));
-  }
-  for (const kind of APP_KINDS) {
-    renderTable(document.getElementById("app-" + kind),
-                comps.filter(c => c.group === "app" && c.kind === kind));
-  }
+  section("app-vm_os", "app", ["vm_os"]);
+  section("app-applications", "app", ["docker_app"]);
+  section("app-backup", "app", ["backup"]);
   renderTable(document.getElementById("app-other"),
               comps.filter(c => c.group === "app" && !APP_KINDS.includes(c.kind)));
   document.getElementById("banner").textContent = "";

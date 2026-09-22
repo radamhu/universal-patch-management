@@ -8,6 +8,15 @@ from ..models import backup_component, error_component, version_component
 
 _OS_ID_RE = re.compile(r'^ID=(\S+)', re.M)
 _OS_VERSION_RE = re.compile(r'^VERSION_ID="?([\d.]+)', re.M)
+_VZDUMP_START_RE = re.compile(r'^INFO: starting new backup job: vzdump ')
+_VZDUMP_STORAGE_RE = re.compile(r'--storage (\S+)')
+
+
+def _job_target_vmids(job, guests):
+    excluded = {v for v in job.get("exclude", "").split(",") if v}
+    if str(job.get("all", 0)) == "1":
+        return {v for v in guests if v not in excluded}
+    return {v for v in str(job.get("vmid", "")).split(",") if v and v not in excluded}
 
 
 def _parse_os_release(text):
@@ -81,24 +90,54 @@ class Pve01Collector:
                     id=f"pve01:{kind}:{vmid}", group="core", host=self.host, kind=kind,
                     name=name, error=str(exc)[:200], now=now))
 
-        newest = {}
+        jobs = [j for j in self._get("/cluster/backup") if str(j.get("enabled", 1)) != "0"]
+        last_run = self._match_job_runs(jobs, guests)
+
+        for job in jobs:
+            job_id = job["id"]
+            label = job.get("comment") or job.get("schedule") or job_id
+            comps.append(backup_component(
+                id=f"pve01:backupjob:{job_id}", group="core", host=self.host,
+                name=f"Backup job {label}",
+                last_ts=last_run.get(job_id), max_age_h=self._max_age_h, now=now))
+        return comps
+
+    def _match_job_runs(self, jobs, guests):
+        """Match each vzdump job to its most recent completed task run.
+
+        /cluster/backup carries no last-run info, and storage content
+        listings can silently come back empty for storages the API can't
+        index (seen in practice on a real pve01 despite successful daily
+        runs) - so this correlates jobs to task history instead: each
+        scheduled run's log opens with the exact vzdump invocation
+        (target vmids + --storage), which is matched against each job's
+        (storage, target vmids).
+        """
+        pending = {j["id"]: (j.get("storage"), _job_target_vmids(j, guests)) for j in jobs}
+        results = {}
         for node in (n["node"] for n in self._get("/nodes")):
-            for st in self._get(f"/nodes/{node}/storage", {"content": "backup"}):
+            if not pending:
+                break
+            tasks = self._get(f"/nodes/{node}/tasks", {"typefilter": "vzdump", "limit": 50})
+            for t in tasks:
+                if not pending or "endtime" not in t or not t.get("upid"):
+                    continue
                 try:
-                    items = self._get(f"/nodes/{node}/storage/{st['storage']}/content",
-                                      {"content": "backup"})
+                    log = self._get(f"/nodes/{node}/tasks/{t['upid']}/log",
+                                    {"start": 0, "limit": 1})
                 except httpx.HTTPError:
                     continue
-                for it in items:
-                    vmid = it.get("vmid")
-                    ctime = it.get("ctime")
-                    if vmid is not None and ctime is not None:
-                        vmid = str(vmid)
-                        newest[vmid] = max(newest.get(vmid, 0), ctime)
-
-        for vmid in sorted(guests):
-            comps.append(backup_component(
-                id=f"pve01:backup:{vmid}", group="core", host=self.host,
-                name=f"Backup {guests[vmid].get('name', vmid)} ({vmid})",
-                last_ts=newest.get(vmid), max_age_h=self._max_age_h, now=now))
-        return comps
+                if not log:
+                    continue
+                text = log[0].get("t", "")
+                if not _VZDUMP_START_RE.match(text):
+                    continue
+                task_vmids = set(_VZDUMP_START_RE.sub("", text).split(" --", 1)[0].split())
+                sm = _VZDUMP_STORAGE_RE.search(text)
+                task_storage = sm.group(1) if sm else None
+                for job_id, (storage, target_vmids) in list(pending.items()):
+                    if task_storage == storage and task_vmids == target_vmids:
+                        results[job_id] = t["endtime"]
+                        del pending[job_id]
+                        break
+        return results

@@ -6,9 +6,9 @@ from pathlib import Path
 
 import httpx
 
-from .collectors.oracle import OracleCollector
 from .collectors.probes import ProbesCollector
 from .collectors.pve01 import Pve01Collector
+from .collectors.ssh_host import SshHostCollector
 from .config import Settings, load_components
 from .latest import LatestResolver
 from .runner import build_status
@@ -24,9 +24,9 @@ def build_collectors(s, components, ssh, pve_client):
     if s.pve_base_url:
         cols.append(Pve01Collector(pve_client, s.backup_max_age_h,
                                    ssh, s.pve_ssh_user, s.pve_hostname))
-    if s.oracle_host and s.oracle_user:
-        cols.append(OracleCollector(ssh, s.oracle_user, s.oracle_host,
-                                    s.oracle_backup_cmd, s.backup_max_age_h))
+    for h in components.hosts:
+        cols.append(SshHostCollector(h["id"], ssh, h["user"], h["address"],
+                                     h["docker"], h.get("backup_cmd"), s.backup_max_age_h))
     if components.probes:
         cols.append(ProbesCollector(components.probes, ssh, s.pve_ssh_user, s.pve_hostname))
     return cols

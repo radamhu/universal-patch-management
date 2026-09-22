@@ -14,6 +14,19 @@ class FakeSsh:
         return self.output
 
 
+def vzdump_task(upid, endtime):
+    return {"upid": upid, "type": "vzdump", "status": "OK", "endtime": endtime}
+
+
+def vzdump_log(vmids, storage):
+    ids = " ".join(vmids)
+    return [{"n": 1, "t": f"INFO: starting new backup job: vzdump {ids} "
+                          f"--notes-template 'x' --mode snapshot --storage {storage}"}]
+
+
+UPID_100 = "UPID:pve01:00000001:00000001:00000001:vzdump::root@pam:"
+
+
 def make_client(extra=None):
     ts = int(NOW.timestamp())
     data = {
@@ -22,9 +35,11 @@ def make_client(extra=None):
             {"vmid": 100, "name": "web", "type": "lxc"},
             {"vmid": 101, "name": "db", "type": "qemu", "node": "pve01"}],
         "/api2/json/nodes": [{"node": "pve01"}],
-        "/api2/json/nodes/pve01/storage": [{"storage": "local"}],
-        "/api2/json/nodes/pve01/storage/local/content": [
-            {"vmid": 100, "ctime": ts - 7200}, {"vmid": 100, "ctime": ts - 3600}],
+        "/api2/json/cluster/backup": [
+            {"id": "job-100", "storage": "local", "vmid": "100", "schedule": "sat 00:00"},
+            {"id": "job-101", "storage": "local", "vmid": "101", "schedule": "sun 00:00"}],
+        "/api2/json/nodes/pve01/tasks": [vzdump_task(UPID_100, ts - 3600)],
+        f"/api2/json/nodes/pve01/tasks/{UPID_100}/log": vzdump_log(["100"], "local"),
     }
     if extra:
         data.update(extra)
@@ -56,17 +71,94 @@ def test_collect():
         FakeResolver({"proxmox": "8.3.1", "os:debian": "13"}), NOW)
     by_id = {c.id: c for c in comps}
     assert set(by_id) == {"pve01:proxmox", "pve01:lxc_os:100", "pve01:vm_os:101",
-                          "pve01:backup:100", "pve01:backup:101"}
+                          "pve01:backupjob:job-100", "pve01:backupjob:job-101"}
     px = by_id["pve01:proxmox"]
     assert (px.current, px.latest, px.status, px.group) == ("8.2.4", "8.3.1", "outdated", "core")
-    assert by_id["pve01:backup:100"].status == "ok"
-    assert by_id["pve01:backup:100"].current == "2026-09-21T11:00:00+00:00"  # newest ctime
-    assert by_id["pve01:backup:101"].status == "unknown"                     # no backups
+    assert by_id["pve01:backupjob:job-100"].status == "ok"
+    assert by_id["pve01:backupjob:job-100"].current == "2026-09-21T11:00:00+00:00"  # task endtime
+    assert by_id["pve01:backupjob:job-101"].status == "unknown"                     # no matching task
     lxc_os = by_id["pve01:lxc_os:100"]
     assert (lxc_os.current, lxc_os.latest, lxc_os.status, lxc_os.group) == ("12", "13", "outdated", "core")
     assert ssh.calls[0][:2] == ("root", "10.0.0.5")
     # vm_os came from the guest agent, not ssh, so unknown latest (no os:vm-agent-distro source)
     assert by_id["pve01:vm_os:101"].status == "error"
+
+
+def test_backup_job_all_guests_respects_exclude():
+    """A job with all=1 covers every guest except those in its exclude list."""
+    ts = int(NOW.timestamp())
+    data = {
+        "/api2/json/version": {"version": "8.2.4"},
+        "/api2/json/cluster/resources": [
+            {"vmid": 100, "name": "web", "type": "lxc"},
+            {"vmid": 101, "name": "db", "type": "qemu", "node": "pve01"}],
+        "/api2/json/nodes": [{"node": "pve01"}],
+        "/api2/json/cluster/backup": [
+            {"id": "job-all", "storage": "local", "all": 1, "exclude": "101"}],
+        "/api2/json/nodes/pve01/tasks": [vzdump_task(UPID_100, ts - 3600)],
+        # job's real run only ever backs up 100 (101 is excluded), so the task log
+        # must list just "100" for the vmid-set match to succeed
+        f"/api2/json/nodes/pve01/tasks/{UPID_100}/log": vzdump_log(["100"], "local"),
+    }
+
+    def h(req):
+        if "/agent/exec" in req.url.path:
+            return httpx.Response(200, json={"data": {"pid": 1, "exited": 1, "out-data": ""}})
+        if req.url.path not in data:
+            return httpx.Response(404)
+        return httpx.Response(200, json={"data": data[req.url.path]})
+
+    c = httpx.Client(base_url="https://pve", headers={"Authorization": "PVEAPIToken=t"},
+                     transport=httpx.MockTransport(h))
+    comps = Pve01Collector(c, 36).collect(FakeResolver(), NOW)
+    by_id = {comp.id: comp for comp in comps}
+    assert by_id["pve01:backupjob:job-all"].status == "ok"
+
+
+def test_backup_job_storage_mismatch_stays_unknown():
+    """A task on a different storage than the job's must not be mistaken for its run."""
+    ts = int(NOW.timestamp())
+    data = {
+        "/api2/json/version": {"version": "8.2.4"},
+        "/api2/json/cluster/resources": [],
+        "/api2/json/nodes": [{"node": "pve01"}],
+        "/api2/json/cluster/backup": [
+            {"id": "job-100", "storage": "local", "vmid": "100"}],
+        "/api2/json/nodes/pve01/tasks": [vzdump_task(UPID_100, ts - 3600)],
+        f"/api2/json/nodes/pve01/tasks/{UPID_100}/log": vzdump_log(["100"], "other-storage"),
+    }
+
+    def h(req):
+        if req.url.path not in data:
+            return httpx.Response(404)
+        return httpx.Response(200, json={"data": data[req.url.path]})
+
+    c = httpx.Client(base_url="https://pve", headers={"Authorization": "PVEAPIToken=t"},
+                     transport=httpx.MockTransport(h))
+    comps = Pve01Collector(c, 36).collect(FakeResolver(), NOW)
+    by_id = {comp.id: comp for comp in comps}
+    assert by_id["pve01:backupjob:job-100"].status == "unknown"
+
+
+def test_disabled_backup_job_skipped():
+    """A disabled job produces no component."""
+    data = {
+        "/api2/json/version": {"version": "8.2.4"},
+        "/api2/json/cluster/resources": [],
+        "/api2/json/nodes": [{"node": "pve01"}],
+        "/api2/json/cluster/backup": [
+            {"id": "job-off", "storage": "local", "vmid": "100", "enabled": 0}],
+    }
+
+    def h(req):
+        if req.url.path not in data:
+            return httpx.Response(404)
+        return httpx.Response(200, json={"data": data[req.url.path]})
+
+    c = httpx.Client(base_url="https://pve", headers={"Authorization": "PVEAPIToken=t"},
+                     transport=httpx.MockTransport(h))
+    comps = Pve01Collector(c, 36).collect(FakeResolver(), NOW)
+    assert not any(comp.id == "pve01:backupjob:job-off" for comp in comps)
 
 
 def test_vm_os_via_guest_agent():
@@ -78,13 +170,12 @@ def test_vm_os_via_guest_agent():
             return handler(req)
         return make_client_handler(req)
 
-    ts = int(NOW.timestamp())
     data = {
         "/api2/json/version": {"version": "8.2.4"},
         "/api2/json/cluster/resources": [
             {"vmid": 101, "name": "db", "type": "qemu", "node": "pve01"}],
         "/api2/json/nodes": [{"node": "pve01"}],
-        "/api2/json/nodes/pve01/storage": [],
+        "/api2/json/cluster/backup": [],
     }
 
     def make_client_handler(req):
@@ -105,7 +196,7 @@ def test_lxc_os_without_ssh_becomes_error():
     comps = Pve01Collector(make_client(), 36).collect(FakeResolver({"proxmox": "8.3.1"}), NOW)
     by_id = {c.id: c for c in comps}
     assert by_id["pve01:lxc_os:100"].status == "error"
-    assert "pve01:proxmox" in by_id and "pve01:backup:100" in by_id
+    assert "pve01:proxmox" in by_id and "pve01:backupjob:job-100" in by_id
 
 
 def test_http_error_raises():
@@ -114,23 +205,25 @@ def test_http_error_raises():
         Pve01Collector(c, 36).collect(FakeResolver(), NOW)
 
 
-def test_storage_error_continues():
-    """One storage returns 500, another returns data - collect() still succeeds."""
+def test_task_log_error_continues():
+    """One task's log 500s, another matches - collect() still succeeds using the match."""
     ts = int(NOW.timestamp())
+    bad_upid = "UPID:pve01:00000002:00000002:00000002:vzdump::root@pam:"
     data = {
         "/api2/json/version": {"version": "8.2.4"},
         "/api2/json/cluster/resources": [
             {"vmid": 100, "name": "web", "type": "lxc"}],
         "/api2/json/nodes": [{"node": "pve01"}],
-        "/api2/json/nodes/pve01/storage": [{"storage": "bad"}, {"storage": "good"}],
-        "/api2/json/nodes/pve01/storage/good/content": [
-            {"vmid": 100, "ctime": ts - 3600}],
+        "/api2/json/cluster/backup": [
+            {"id": "job-100", "storage": "local", "vmid": "100"}],
+        "/api2/json/nodes/pve01/tasks": [
+            vzdump_task(bad_upid, ts - 1800), vzdump_task(UPID_100, ts - 3600)],
+        f"/api2/json/nodes/pve01/tasks/{UPID_100}/log": vzdump_log(["100"], "local"),
     }
 
     def h(req):
         assert req.headers["Authorization"] == "PVEAPIToken=t"
-        # bad storage returns 500, good storage returns data
-        if req.url.path == "/api2/json/nodes/pve01/storage/bad/content":
+        if req.url.path == f"/api2/json/nodes/pve01/tasks/{bad_upid}/log":
             return httpx.Response(500)
         if req.url.path not in data:
             return httpx.Response(404)
@@ -140,8 +233,8 @@ def test_storage_error_continues():
                      transport=httpx.MockTransport(h))
     comps = Pve01Collector(c, 36).collect(FakeResolver(), NOW)
     by_id = {c.id: c for c in comps}
-    assert "pve01:backup:100" in by_id
-    assert by_id["pve01:backup:100"].status == "ok"
+    assert "pve01:backupjob:job-100" in by_id
+    assert by_id["pve01:backupjob:job-100"].status == "ok"
 
 
 def test_skip_template_guests():
@@ -153,9 +246,10 @@ def test_skip_template_guests():
             {"vmid": 100, "name": "web", "type": "lxc", "template": 1},
             {"vmid": 101, "name": "db", "type": "qemu", "node": "pve01"}],
         "/api2/json/nodes": [{"node": "pve01"}],
-        "/api2/json/nodes/pve01/storage": [{"storage": "local"}],
-        "/api2/json/nodes/pve01/storage/local/content": [
-            {"vmid": 101, "ctime": ts - 3600}],
+        "/api2/json/cluster/backup": [
+            {"id": "job-101", "storage": "local", "vmid": "101"}],
+        "/api2/json/nodes/pve01/tasks": [vzdump_task(UPID_100, ts - 3600)],
+        f"/api2/json/nodes/pve01/tasks/{UPID_100}/log": vzdump_log(["101"], "local"),
     }
 
     def h(req):
@@ -171,23 +265,21 @@ def test_skip_template_guests():
     comps = Pve01Collector(c, 36).collect(FakeResolver(), NOW)
     by_id = {c.id: c for c in comps}
     # web (lxc) is a template and skipped entirely; db (qemu) still gets vm_os + backup
-    assert set(by_id) == {"pve01:proxmox", "pve01:vm_os:101", "pve01:backup:101"}
+    assert set(by_id) == {"pve01:proxmox", "pve01:vm_os:101", "pve01:backupjob:job-101"}
 
 
-def test_skip_items_without_vmid_ctime():
-    """Backup items lacking vmid or ctime are ignored."""
+def test_unparseable_task_log_ignored():
+    """A vzdump task whose log doesn't start with the expected line is skipped."""
     ts = int(NOW.timestamp())
     data = {
         "/api2/json/version": {"version": "8.2.4"},
         "/api2/json/cluster/resources": [
             {"vmid": 100, "name": "web", "type": "lxc"}],
         "/api2/json/nodes": [{"node": "pve01"}],
-        "/api2/json/nodes/pve01/storage": [{"storage": "local"}],
-        "/api2/json/nodes/pve01/storage/local/content": [
-            {"vmid": 100, "ctime": ts - 3600},
-            {"vmid": 100},  # missing ctime
-            {"ctime": ts - 1800},  # missing vmid
-            {"vmid": 100, "ctime": ts - 7200}],
+        "/api2/json/cluster/backup": [
+            {"id": "job-100", "storage": "local", "vmid": "100"}],
+        "/api2/json/nodes/pve01/tasks": [vzdump_task(UPID_100, ts - 3600)],
+        f"/api2/json/nodes/pve01/tasks/{UPID_100}/log": [{"n": 1, "t": "INFO: something else"}],
     }
 
     def h(req):
@@ -200,6 +292,4 @@ def test_skip_items_without_vmid_ctime():
                      transport=httpx.MockTransport(h))
     comps = Pve01Collector(c, 36).collect(FakeResolver(), NOW)
     by_id = {c.id: c for c in comps}
-    assert "pve01:backup:100" in by_id
-    # Should use the newest valid ctime (ts - 3600, not ts - 7200)
-    assert by_id["pve01:backup:100"].current == "2026-09-21T11:00:00+00:00"
+    assert by_id["pve01:backupjob:job-100"].status == "unknown"

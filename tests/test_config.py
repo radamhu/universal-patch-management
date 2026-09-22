@@ -17,13 +17,11 @@ def test_settings_from_env_full():
     s = Settings.from_env({
         "PVE01_HOST": "10.0.0.5", "PVE01_HOST_USER": "root@pam",
         "PVE01_HOST_TOKEN": "upm", "PVE01_HOST_TOKEN_SECRET": "sekret",
-        "ORACLE_SSH_HOST": "1.2.3.4", "ORACLE_SSH_USER": "ubuntu",
         "POLL_INTERVAL": "5",
     })
     assert s.pve_base_url == "https://10.0.0.5:8006"
     assert s.pve_auth == "PVEAPIToken=root@pam!upm=sekret"
     assert s.pve_verify_tls is False
-    assert s.oracle_host == "1.2.3.4" and s.oracle_user == "ubuntu"
     assert s.poll_interval_min == 5 and s.pve_ssh_user == "root"
 
 
@@ -34,7 +32,7 @@ def test_settings_token_with_full_id_and_empty_env():
     })
     assert s.pve_auth == "PVEAPIToken=root@pam!full=x"
     empty = Settings.from_env({})
-    assert empty.pve_base_url is None and empty.oracle_host is None
+    assert empty.pve_base_url is None
     assert empty.poll_interval_min == 30 and empty.port == 8080
 
 
@@ -54,6 +52,23 @@ def test_load_components(tmp_path):
 def test_load_components_rejects_bad_probe(tmp_path):
     p = tmp_path / "c.json"
     p.write_text(json.dumps({"probes": [{"id": "nope:a"}]}))
+    with pytest.raises(ValueError):
+        load_components(p)
+
+
+def test_load_components_hosts(tmp_path):
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps({
+        "hosts": [{"id": "oracle", "user": "ubuntu", "address": "1.2.3.4",
+                   "docker": True, "backup_cmd": "backup-cmd"}],
+    }))
+    c = load_components(p)
+    assert len(c.hosts) == 1 and c.hosts[0]["id"] == "oracle"
+
+
+def test_load_components_rejects_bad_host(tmp_path):
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps({"hosts": [{"id": "oracle"}]}))
     with pytest.raises(ValueError):
         load_components(p)
 

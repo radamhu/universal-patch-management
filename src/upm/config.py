@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 PROBE_REQUIRED = ("id", "name", "kind", "group", "host", "target", "cmd", "regex")
+HOST_REQUIRED = ("id", "user", "address", "docker")
 
 
 def normalize_pve_host(raw):
@@ -26,9 +27,6 @@ class Settings:
     pve_auth: str | None = field(repr=False)
     pve_verify_tls: bool
     pve_ssh_user: str
-    oracle_host: str | None
-    oracle_user: str | None
-    oracle_backup_cmd: str | None
     ssh_key_path: str
     known_hosts_path: str
     poll_interval_min: int
@@ -53,9 +51,6 @@ class Settings:
             pve_auth=auth,
             pve_verify_tls=env.get("PVE_VERIFY_TLS", "false").lower() == "true",
             pve_ssh_user=env.get("PVE01_SSH_USER", "root"),
-            oracle_host=env.get("ORACLE_SSH_HOST") or None,
-            oracle_user=env.get("ORACLE_SSH_USER") or None,
-            oracle_backup_cmd=env.get("ORACLE_BACKUP_CMD") or None,
             ssh_key_path=env.get("SSH_KEY_PATH", "/run/secrets/upm_ssh_key"),
             known_hosts_path=env.get("KNOWN_HOSTS_PATH", str(data_dir / "known_hosts")),
             poll_interval_min=_int(env, "POLL_INTERVAL", 30),
@@ -70,6 +65,7 @@ class Settings:
 class Components:
     sources: dict = field(default_factory=dict)
     probes: list = field(default_factory=list)
+    hosts: list = field(default_factory=list)
 
 
 def load_components(path):
@@ -84,4 +80,9 @@ def load_components(path):
             raise ValueError(f"probe {p.get('id', '?')}: missing {missing}")
         if not p["id"].startswith("probe:"):
             raise ValueError(f"probe id must start with 'probe:': {p['id']}")
-    return Components(sources=raw.get("sources", {}), probes=probes)
+    hosts = raw.get("hosts", [])
+    for h in hosts:
+        missing = [k for k in HOST_REQUIRED if k not in h]
+        if missing:
+            raise ValueError(f"host {h.get('id', '?')}: missing {missing}")
+    return Components(sources=raw.get("sources", {}), probes=probes, hosts=hosts)

@@ -13,9 +13,10 @@ def settings(env):
 def test_build_collectors_by_config():
     assert build_collectors(settings({}), Components(), None, None) == []
     env = {"PVE01_HOST": "h", "PVE01_HOST_USER": "root@pam", "PVE01_HOST_TOKEN": "t",
-           "PVE01_HOST_TOKEN_SECRET": "s", "ORACLE_SSH_HOST": "o", "ORACLE_SSH_USER": "u"}
+           "PVE01_HOST_TOKEN_SECRET": "s"}
     probe = {"id": "probe:a"}
-    cols = build_collectors(settings(env), Components(probes=[probe]), object(), object())
+    host = {"id": "oracle", "user": "u", "address": "o", "docker": True, "backup_cmd": None}
+    cols = build_collectors(settings(env), Components(probes=[probe], hosts=[host]), object(), object())
     assert [c.host for c in cols] == ["pve01", "oracle", "probe"]
 
 
