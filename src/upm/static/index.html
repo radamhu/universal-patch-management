@@ -46,8 +46,6 @@
   <h3>Backups</h3>
   <div class="card"><table id="core-backup"></table></div>
   <h2>Application</h2>
-  <h3>VM OS</h3>
-  <div class="card"><table id="app-vm_os"></table></div>
   <h3>Applications</h3>
   <div class="card"><table id="app-applications"></table></div>
   <h3>Backups</h3>
@@ -129,8 +127,7 @@ function render(doc) {
   section("core-lxc_os", "core", ["lxc_os"]);
   section("core-vm_os", "core", ["vm_os"]);
   section("core-backup", "core", ["backup"]);
-  const APP_KINDS = ["vm_os", "docker_app", "backup"];
-  section("app-vm_os", "app", ["vm_os"]);
+  const APP_KINDS = ["docker_app", "backup"];
   section("app-applications", "app", ["docker_app"]);
   section("app-backup", "app", ["backup"]);
   renderTable(document.getElementById("app-other"),
