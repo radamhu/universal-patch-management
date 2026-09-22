@@ -15,6 +15,8 @@
   main { max-width:960px; margin:0 auto; }
   h1 { font-size:20px; margin:0 0 4px; }
   h2 { font-size:16px; margin:24px 0 8px; }
+  h3 { font-size:13px; margin:16px 0 6px; color:var(--muted); font-weight:600; }
+  h3:first-of-type { margin-top:8px; }
   #meta { color:var(--muted); margin-bottom:8px; }
   #hosts span { display:inline-block; margin-right:12px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:8px; overflow-x:auto; }
@@ -35,9 +37,23 @@
   <div id="hosts"></div>
   <div id="banner"></div>
   <h2>Core Infra</h2>
-  <div class="card"><table id="core"></table></div>
+  <h3>Host</h3>
+  <div class="card"><table id="core-proxmox"></table></div>
+  <h3>LXC</h3>
+  <div class="card"><table id="core-lxc_os"></table></div>
+  <h3>VMs</h3>
+  <div class="card"><table id="core-vm_os"></table></div>
+  <h3>Backups</h3>
+  <div class="card"><table id="core-backup"></table></div>
   <h2>Application</h2>
-  <div class="card"><table id="app"></table></div>
+  <h3>VM OS</h3>
+  <div class="card"><table id="app-vm_os"></table></div>
+  <h3>Docker Apps</h3>
+  <div class="card"><table id="app-docker_app"></table></div>
+  <h3>Backups</h3>
+  <div class="card"><table id="app-backup"></table></div>
+  <h3>Other</h3>
+  <div class="card"><table id="app-other"></table></div>
 </main>
 <script>
 const SYMBOL = { ok: "✔ ok", outdated: "▲ outdated", error: "✖ error", unknown: "? unknown" };
@@ -96,9 +112,18 @@ function render(doc) {
     hosts.append(s);
   }
   const comps = Array.isArray(doc.components) ? doc.components : [];
-  for (const g of ["core", "app"]) {
-    renderTable(document.getElementById(g), comps.filter(c => c.group === g));
+  const CORE_KINDS = ["proxmox", "lxc_os", "vm_os", "backup"];
+  const APP_KINDS = ["vm_os", "docker_app", "backup"];
+  for (const kind of CORE_KINDS) {
+    renderTable(document.getElementById("core-" + kind),
+                comps.filter(c => c.group === "core" && c.kind === kind));
   }
+  for (const kind of APP_KINDS) {
+    renderTable(document.getElementById("app-" + kind),
+                comps.filter(c => c.group === "app" && c.kind === kind));
+  }
+  renderTable(document.getElementById("app-other"),
+              comps.filter(c => c.group === "app" && !APP_KINDS.includes(c.kind)));
   document.getElementById("banner").textContent = "";
 }
 
