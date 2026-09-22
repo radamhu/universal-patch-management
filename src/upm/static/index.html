@@ -20,9 +20,15 @@
   #meta { color:var(--muted); margin-bottom:8px; }
   #hosts span { display:inline-block; margin-right:12px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:8px; overflow-x:auto; }
-  table { width:100%; border-collapse:collapse; }
-  th, td { text-align:left; padding:8px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
-  td:first-child { white-space:normal; word-break:break-word; max-width:360px; }
+  table { width:100%; border-collapse:collapse; table-layout:fixed; }
+  th, td { text-align:left; padding:8px 12px; border-bottom:1px solid var(--line); white-space:nowrap;
+           overflow:hidden; text-overflow:ellipsis; }
+  th:nth-child(1), td:nth-child(1) { width:30%; }
+  th:nth-child(2), td:nth-child(2) { width:18%; }
+  th:nth-child(3), td:nth-child(3) { width:12%; }
+  th:nth-child(4), td:nth-child(4) { width:14%; }
+  th:nth-child(5), td:nth-child(5) { width:14%; }
+  th:nth-child(6), td:nth-child(6) { width:12%; }
   th { color:var(--muted); font-weight:600; }
   tr:last-child td { border-bottom:0; }
   .badge { font-weight:600; }
@@ -96,7 +102,9 @@ function renderTable(table, rows) {
     for (const c of groups.get(status)) {
       const tr = el("tr");
       const isBackup = c.kind === "backup";
-      tr.append(el("td", c.name), el("td", c.host, status === "ok" ? undefined : "error"), el("td", c.kind));
+      const nameTd = el("td", c.name); nameTd.title = c.name;
+      const hostTd = el("td", c.host, status === "ok" ? undefined : "error"); hostTd.title = c.host;
+      tr.append(nameTd, hostTd, el("td", c.kind));
       tr.append(el("td", isBackup && c.current ? age(c.current) : (c.current ?? "-")));
       tr.append(el("td", c.latest ?? "-"));
       const label = (SYMBOL[c.status] ?? "? " + (c.status ?? "unknown")) + (c.stale ? " (stale)" : "");
