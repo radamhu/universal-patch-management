@@ -40,7 +40,7 @@ class Pve01Collector:
 
     def _agent_exec(self, node, vmid, cmd):
         r = self._client.post(f"/api2/json/nodes/{node}/qemu/{vmid}/agent/exec",
-                              data={"command": cmd})
+                              data={"command": ["/bin/sh", "-c", cmd]})
         r.raise_for_status()
         pid = r.json()["data"]["pid"]
         for _ in range(25):

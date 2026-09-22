@@ -191,6 +191,40 @@ def test_vm_os_via_guest_agent():
     assert (vm_os.current, vm_os.latest, vm_os.status) == ("24.04", "24.04", "ok")
 
 
+def test_vm_os_agent_exec_sends_command_as_argv_array():
+    """The guest-agent exec API needs `command` as repeated argv entries, not one shell string --
+
+    passing a single string makes the agent try to exec a program literally named that string
+    (seen in practice: 'cat /etc/os-release' as one arg -> "No such file or directory").
+    """
+    seen = {}
+
+    def h(req):
+        if req.url.path.endswith("/agent/exec"):
+            seen["command"] = httpx.QueryParams(req.read()).get_list("command")
+            return httpx.Response(200, json={"data": {"pid": 1}})
+        if req.url.path.endswith("/agent/exec-status"):
+            return httpx.Response(200, json={"data": {
+                "exited": 1, "out-data": 'ID=ubuntu\nVERSION_ID="24.04"\n'}})
+        if req.url.path not in data:
+            return httpx.Response(404)
+        return httpx.Response(200, json={"data": data[req.url.path]})
+
+    data = {
+        "/api2/json/version": {"version": "8.2.4"},
+        "/api2/json/cluster/resources": [
+            {"vmid": 101, "name": "db", "type": "qemu", "node": "pve01"}],
+        "/api2/json/nodes": [{"node": "pve01"}],
+        "/api2/json/cluster/backup": [],
+    }
+    c = httpx.Client(base_url="https://pve", headers={"Authorization": "PVEAPIToken=t"},
+                     transport=httpx.MockTransport(h))
+    comps = Pve01Collector(c, 36).collect(FakeResolver({"os:ubuntu": "24.04"}), NOW)
+    by_id = {comp.id: comp for comp in comps}
+    assert by_id["pve01:vm_os:101"].status == "ok"
+    assert seen["command"] == ["/bin/sh", "-c", "cat /etc/os-release"]
+
+
 def test_lxc_os_without_ssh_becomes_error():
     """No SSH configured -> LXC OS check errors but rest of collect() still succeeds."""
     comps = Pve01Collector(make_client(), 36).collect(FakeResolver({"proxmox": "8.3.1"}), NOW)
