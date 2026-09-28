@@ -11,6 +11,9 @@ Alloy), mirroring the same Core Infra / Application grouping:
 
 ![Grafana dashboard](docs/grafana-dashboard.png)
 
+Dashboard JSON is exported at `docs/grafana-dashboard.json` (source of truth is Grafana Cloud; re-export
+after changes there).
+
 ## Running
 
 1. `cp .env.example .env` and fill in only the `PVE01_*` values. Never reuse `.env.dev`; it holds unrelated secrets.
