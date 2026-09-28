@@ -1,5 +1,11 @@
 # universal-patch-management
 
+Polls Proxmox/LXC/VM/Docker hosts over SSH, compares installed vs. latest-stable versions, and serves a
+status dashboard (`/status.json`, `/healthz`) that feeds a Grafana dashboard via Alloy. One glance shows
+which hosts, containers, and backup jobs are up to date and which need attention.
+
+![Patch Status dashboard](docs/screenshot.png)
+
 ## Running
 
 1. `cp .env.example .env` and fill in only the `PVE01_*` values. Never reuse `.env.dev`; it holds unrelated secrets.
