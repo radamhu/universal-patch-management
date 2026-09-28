@@ -2,6 +2,8 @@ import json
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from .metrics import render_prometheus
+
 
 def make_server(store, static_dir, max_age_s, port, bind="0.0.0.0"):
     class Handler(BaseHTTPRequestHandler):
@@ -36,6 +38,9 @@ def make_server(store, static_dir, max_age_s, port, bind="0.0.0.0"):
                     age = None
                 ok = age is not None and age <= max_age_s
                 self._json(200 if ok else 503, {"ok": ok, "age_s": age})
+            elif path == "/metrics":
+                self._send(200, render_prometheus(store.load()),
+                          "text/plain; version=0.0.4; charset=utf-8")
             else:
                 self._json(404, {"error": "not found"})
 

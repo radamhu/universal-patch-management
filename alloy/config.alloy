@@ -1,0 +1,17 @@
+// alloy/config.alloy
+prometheus.scrape "upm" {
+  targets = [{"__address__" = "app:8080"}]
+  metrics_path    = "/metrics"
+  scrape_interval = "60s"
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = env("GRAFANA_PROM_PUSH_URL")
+    basic_auth {
+      username = env("GRAFANA_PROM_USER")
+      password = env("GRAFANA_PROM_TOKEN")
+    }
+  }
+}
