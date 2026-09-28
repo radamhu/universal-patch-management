@@ -17,7 +17,7 @@ def test_build_collectors_by_config():
     probe = {"id": "probe:a"}
     host = {"id": "oracle", "user": "u", "address": "o", "docker": True, "backup_cmd": None}
     cols = build_collectors(settings(env), Components(probes=[probe], hosts=[host]), object(), object())
-    assert [c.host for c in cols] == ["pve01", "oracle", "probe"]
+    assert [c.host for c in cols] == ["proxmox", "oracle", "probe"]
 
 
 def test_poll_once_saves_and_survives_failure(tmp_path):

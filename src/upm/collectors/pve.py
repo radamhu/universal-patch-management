@@ -27,8 +27,8 @@ def _parse_os_release(text):
     return id_m.group(1).strip('"'), ver_m.group(1)
 
 
-class Pve01Collector:
-    host = "pve01"
+class ProxmoxCollector:
+    host = "proxmox"
 
     def __init__(self, client, max_age_h, ssh=None, pve_ssh_user=None, pve_hostname=None):
         self._client, self._max_age_h = client, max_age_h
@@ -85,7 +85,7 @@ class Pve01Collector:
             real_host = self.host
 
         comps = [version_component(
-            id="pve01:proxmox", group="core", host=real_host, kind="proxmox",
+            id="proxmox:proxmox", group="core", host=real_host, kind="proxmox",
             name="Proxmox VE", current=self._get("/version")["version"],
             latest=resolver.latest("proxmox"), now=now)]
 
@@ -101,11 +101,11 @@ class Pve01Collector:
                 text = self._os_release(g.get("type"), vmid, g.get("node"))
                 os_id, version = _parse_os_release(text)
                 comps.append(version_component(
-                    id=f"pve01:{kind}:{vmid}", group="core", host=real_host, kind=kind,
+                    id=f"proxmox:{kind}:{vmid}", group="core", host=real_host, kind=kind,
                     name=name, current=version, latest=resolver.latest(f"os:{os_id}"), now=now))
             except Exception as exc:
                 comps.append(error_component(
-                    id=f"pve01:{kind}:{vmid}", group="core", host=real_host, kind=kind,
+                    id=f"proxmox:{kind}:{vmid}", group="core", host=real_host, kind=kind,
                     name=name, error=str(exc)[:200], now=now))
 
             try:
@@ -116,7 +116,7 @@ class Pve01Collector:
                     cname, image = line.split("|", 1)
                     repo, tag = split_image(image)
                     comps.append(version_component(
-                        id=f"pve01:docker:{vmid}:{cname}", group="app", host=guest_host,
+                        id=f"proxmox:docker:{vmid}:{cname}", group="app", host=guest_host,
                         kind="docker_app", name=f"{cname} ({repo})",
                         current=tag, latest=resolver.latest(f"app:{repo}"), now=now))
             except Exception:
@@ -129,7 +129,7 @@ class Pve01Collector:
             job_id = job["id"]
             label = job.get("comment") or job.get("schedule") or job_id
             comps.append(backup_component(
-                id=f"pve01:backupjob:{job_id}", group="core", host=real_host,
+                id=f"proxmox:backupjob:{job_id}", group="core", host=real_host,
                 name=f"Backup job {label}",
                 last_ts=last_run.get(job_id), max_age_h=self._max_age_h, now=now))
         return comps

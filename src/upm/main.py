@@ -1,5 +1,6 @@
 import logging
 import os
+import signal
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -7,7 +8,7 @@ from pathlib import Path
 import httpx
 
 from .collectors.probes import ProbesCollector
-from .collectors.pve01 import Pve01Collector
+from .collectors.pve import ProxmoxCollector
 from .collectors.ssh_host import SshHostCollector
 from .config import Settings, load_components
 from .latest import LatestResolver
@@ -22,7 +23,7 @@ log = logging.getLogger("upm")
 def build_collectors(s, components, ssh, pve_client):
     cols = []
     if s.pve_base_url:
-        cols.append(Pve01Collector(pve_client, s.backup_max_age_h,
+        cols.append(ProxmoxCollector(pve_client, s.backup_max_age_h,
                                    ssh, s.pve_ssh_user, s.pve_hostname))
     for h in components.hosts:
         cols.append(SshHostCollector(h["id"], ssh, h["user"], h["address"],
@@ -49,7 +50,7 @@ def poll_loop(collectors, resolver, store, interval_s, stop):
 def main():
     logging.basicConfig(level=logging.INFO)
     s = Settings.from_env(os.environ)
-    components = load_components(s.components_path)
+    components = load_components(s.components_path, os.environ)
     ssh = SshRunner(s.ssh_key_path, s.known_hosts_path)
     pve_client = httpx.Client(
         base_url=s.pve_base_url or "", verify=s.pve_verify_tls, timeout=15,
@@ -59,15 +60,24 @@ def main():
     collectors = build_collectors(s, components, ssh, pve_client)
     interval = s.poll_interval_min * 60
     stop = threading.Event()
-    threading.Thread(target=poll_loop, args=(collectors, resolver, store, interval, stop),
-                     daemon=True).start()
+    poll_thread = threading.Thread(target=poll_loop, args=(collectors, resolver, store, interval, stop),
+                                   daemon=True)
+    poll_thread.start()
     static = Path(__file__).parent / "static"
     server = make_server(store, static, max_age_s=interval * 3, port=s.port)
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
     log.info("serving on :%d, collectors=%s", s.port, [c.host for c in collectors])
-    try:
-        server.serve_forever()
-    finally:
-        stop.set()
+
+    shutdown = threading.Event()
+    signal.signal(signal.SIGTERM, lambda signum, frame: shutdown.set())
+    signal.signal(signal.SIGINT, lambda signum, frame: shutdown.set())
+    shutdown.wait()
+    log.info("shutting down")
+    server.shutdown()
+    stop.set()
+    server_thread.join(timeout=10)
+    poll_thread.join(timeout=10)
 
 
 if __name__ == "__main__":

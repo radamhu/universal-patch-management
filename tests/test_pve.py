@@ -1,7 +1,7 @@
 import pytest
 import httpx
 from fakes import NOW, FakeResolver
-from upm.collectors.pve01 import Pve01Collector
+from upm.collectors.pve import ProxmoxCollector
 
 
 class FakeSsh:
@@ -67,21 +67,21 @@ def make_agent_exec(out_data, exited=1):
 
 def test_collect():
     ssh = FakeSsh()
-    comps = Pve01Collector(make_client(), 36, ssh, "root", "10.0.0.5").collect(
+    comps = ProxmoxCollector(make_client(), 36, ssh, "root", "10.0.0.5").collect(
         FakeResolver({"proxmox": "8.3.1", "os:debian": "13"}), NOW)
     by_id = {c.id: c for c in comps}
-    assert set(by_id) == {"pve01:proxmox", "pve01:lxc_os:100", "pve01:vm_os:101",
-                          "pve01:backupjob:job-100", "pve01:backupjob:job-101"}
-    px = by_id["pve01:proxmox"]
+    assert set(by_id) == {"proxmox:proxmox", "proxmox:lxc_os:100", "proxmox:vm_os:101",
+                          "proxmox:backupjob:job-100", "proxmox:backupjob:job-101"}
+    px = by_id["proxmox:proxmox"]
     assert (px.current, px.latest, px.status, px.group) == ("8.2.4", "8.3.1", "outdated", "core")
-    assert by_id["pve01:backupjob:job-100"].status == "ok"
-    assert by_id["pve01:backupjob:job-100"].current == "2026-09-21T11:00:00+00:00"  # task endtime
-    assert by_id["pve01:backupjob:job-101"].status == "unknown"                     # no matching task
-    lxc_os = by_id["pve01:lxc_os:100"]
+    assert by_id["proxmox:backupjob:job-100"].status == "ok"
+    assert by_id["proxmox:backupjob:job-100"].current == "2026-09-21T11:00:00+00:00"  # task endtime
+    assert by_id["proxmox:backupjob:job-101"].status == "unknown"                     # no matching task
+    lxc_os = by_id["proxmox:lxc_os:100"]
     assert (lxc_os.current, lxc_os.latest, lxc_os.status, lxc_os.group) == ("12", "13", "outdated", "core")
     assert ssh.calls[0][:2] == ("root", "10.0.0.5")
     # vm_os came from the guest agent, not ssh, so unknown latest (no os:vm-agent-distro source)
-    assert by_id["pve01:vm_os:101"].status == "error"
+    assert by_id["proxmox:vm_os:101"].status == "error"
 
 
 def test_backup_job_all_guests_respects_exclude():
@@ -110,9 +110,9 @@ def test_backup_job_all_guests_respects_exclude():
 
     c = httpx.Client(base_url="https://pve", headers={"Authorization": "PVEAPIToken=t"},
                      transport=httpx.MockTransport(h))
-    comps = Pve01Collector(c, 36).collect(FakeResolver(), NOW)
+    comps = ProxmoxCollector(c, 36).collect(FakeResolver(), NOW)
     by_id = {comp.id: comp for comp in comps}
-    assert by_id["pve01:backupjob:job-all"].status == "ok"
+    assert by_id["proxmox:backupjob:job-all"].status == "ok"
 
 
 def test_backup_job_storage_mismatch_stays_unknown():
@@ -135,9 +135,9 @@ def test_backup_job_storage_mismatch_stays_unknown():
 
     c = httpx.Client(base_url="https://pve", headers={"Authorization": "PVEAPIToken=t"},
                      transport=httpx.MockTransport(h))
-    comps = Pve01Collector(c, 36).collect(FakeResolver(), NOW)
+    comps = ProxmoxCollector(c, 36).collect(FakeResolver(), NOW)
     by_id = {comp.id: comp for comp in comps}
-    assert by_id["pve01:backupjob:job-100"].status == "unknown"
+    assert by_id["proxmox:backupjob:job-100"].status == "unknown"
 
 
 def test_disabled_backup_job_skipped():
@@ -157,8 +157,8 @@ def test_disabled_backup_job_skipped():
 
     c = httpx.Client(base_url="https://pve", headers={"Authorization": "PVEAPIToken=t"},
                      transport=httpx.MockTransport(h))
-    comps = Pve01Collector(c, 36).collect(FakeResolver(), NOW)
-    assert not any(comp.id == "pve01:backupjob:job-off" for comp in comps)
+    comps = ProxmoxCollector(c, 36).collect(FakeResolver(), NOW)
+    assert not any(comp.id == "proxmox:backupjob:job-off" for comp in comps)
 
 
 def test_vm_os_via_guest_agent():
@@ -185,9 +185,9 @@ def test_vm_os_via_guest_agent():
 
     c = httpx.Client(base_url="https://pve", headers={"Authorization": "PVEAPIToken=t"},
                      transport=httpx.MockTransport(combined))
-    comps = Pve01Collector(c, 36).collect(FakeResolver({"os:ubuntu": "24.04"}), NOW)
+    comps = ProxmoxCollector(c, 36).collect(FakeResolver({"os:ubuntu": "24.04"}), NOW)
     by_id = {comp.id: comp for comp in comps}
-    vm_os = by_id["pve01:vm_os:101"]
+    vm_os = by_id["proxmox:vm_os:101"]
     assert (vm_os.current, vm_os.latest, vm_os.status) == ("24.04", "24.04", "ok")
 
 
@@ -219,9 +219,9 @@ def test_vm_os_agent_exec_sends_command_as_argv_array():
     }
     c = httpx.Client(base_url="https://pve", headers={"Authorization": "PVEAPIToken=t"},
                      transport=httpx.MockTransport(h))
-    comps = Pve01Collector(c, 36).collect(FakeResolver({"os:ubuntu": "24.04"}), NOW)
+    comps = ProxmoxCollector(c, 36).collect(FakeResolver({"os:ubuntu": "24.04"}), NOW)
     by_id = {comp.id: comp for comp in comps}
-    assert by_id["pve01:vm_os:101"].status == "ok"
+    assert by_id["proxmox:vm_os:101"].status == "ok"
     assert ["/bin/sh", "-c", "cat /etc/os-release"] in seen
 
 
@@ -260,29 +260,29 @@ def test_vm_and_lxc_docker_apps_collected():
     ssh = DockerAwareSsh()
     c = httpx.Client(base_url="https://pve", headers={"Authorization": "PVEAPIToken=t"},
                      transport=httpx.MockTransport(h))
-    comps = Pve01Collector(c, 36, ssh, "root", "10.0.0.5").collect(
+    comps = ProxmoxCollector(c, 36, ssh, "root", "10.0.0.5").collect(
         FakeResolver({"os:debian": "12", "os:ubuntu": "24.04"}), NOW)
     by_id = {comp.id: comp for comp in comps}
-    lxc_docker = by_id["pve01:docker:100:web"]
+    lxc_docker = by_id["proxmox:docker:100:web"]
     assert (lxc_docker.current, lxc_docker.group, lxc_docker.kind, lxc_docker.host) == \
         ("1.27", "app", "docker_app", "web (100)")
-    vm_docker = by_id["pve01:docker:101:api"]
+    vm_docker = by_id["proxmox:docker:101:api"]
     assert (vm_docker.current, vm_docker.group, vm_docker.kind, vm_docker.host) == \
         ("2.0", "app", "docker_app", "db (101)")
 
 
 def test_lxc_os_without_ssh_becomes_error():
     """No SSH configured -> LXC OS check errors but rest of collect() still succeeds."""
-    comps = Pve01Collector(make_client(), 36).collect(FakeResolver({"proxmox": "8.3.1"}), NOW)
+    comps = ProxmoxCollector(make_client(), 36).collect(FakeResolver({"proxmox": "8.3.1"}), NOW)
     by_id = {c.id: c for c in comps}
-    assert by_id["pve01:lxc_os:100"].status == "error"
-    assert "pve01:proxmox" in by_id and "pve01:backupjob:job-100" in by_id
+    assert by_id["proxmox:lxc_os:100"].status == "error"
+    assert "proxmox:proxmox" in by_id and "proxmox:backupjob:job-100" in by_id
 
 
 def test_http_error_raises():
     c = httpx.Client(base_url="https://pve", transport=httpx.MockTransport(lambda r: httpx.Response(401)))
     with pytest.raises(httpx.HTTPStatusError):
-        Pve01Collector(c, 36).collect(FakeResolver(), NOW)
+        ProxmoxCollector(c, 36).collect(FakeResolver(), NOW)
 
 
 def test_task_log_error_continues():
@@ -311,10 +311,10 @@ def test_task_log_error_continues():
 
     c = httpx.Client(base_url="https://pve", headers={"Authorization": "PVEAPIToken=t"},
                      transport=httpx.MockTransport(h))
-    comps = Pve01Collector(c, 36).collect(FakeResolver(), NOW)
+    comps = ProxmoxCollector(c, 36).collect(FakeResolver(), NOW)
     by_id = {c.id: c for c in comps}
-    assert "pve01:backupjob:job-100" in by_id
-    assert by_id["pve01:backupjob:job-100"].status == "ok"
+    assert "proxmox:backupjob:job-100" in by_id
+    assert by_id["proxmox:backupjob:job-100"].status == "ok"
 
 
 def test_skip_template_guests():
@@ -342,10 +342,10 @@ def test_skip_template_guests():
 
     c = httpx.Client(base_url="https://pve", headers={"Authorization": "PVEAPIToken=t"},
                      transport=httpx.MockTransport(h))
-    comps = Pve01Collector(c, 36).collect(FakeResolver(), NOW)
+    comps = ProxmoxCollector(c, 36).collect(FakeResolver(), NOW)
     by_id = {c.id: c for c in comps}
     # web (lxc) is a template and skipped entirely; db (qemu) still gets vm_os + backup
-    assert set(by_id) == {"pve01:proxmox", "pve01:vm_os:101", "pve01:backupjob:job-101"}
+    assert set(by_id) == {"proxmox:proxmox", "proxmox:vm_os:101", "proxmox:backupjob:job-101"}
 
 
 def test_unparseable_task_log_ignored():
@@ -370,6 +370,6 @@ def test_unparseable_task_log_ignored():
 
     c = httpx.Client(base_url="https://pve", headers={"Authorization": "PVEAPIToken=t"},
                      transport=httpx.MockTransport(h))
-    comps = Pve01Collector(c, 36).collect(FakeResolver(), NOW)
+    comps = ProxmoxCollector(c, 36).collect(FakeResolver(), NOW)
     by_id = {c.id: c for c in comps}
-    assert by_id["pve01:backupjob:job-100"].status == "unknown"
+    assert by_id["proxmox:backupjob:job-100"].status == "unknown"
