@@ -6,6 +6,11 @@ which hosts, containers, and backup jobs are up to date and which need attention
 
 ![Patch Status dashboard](docs/screenshot.png)
 
+Also feeds a Grafana Cloud dashboard (`upm_component_status`/`upm_generated_timestamp_seconds` metrics via
+Alloy), mirroring the same Core Infra / Application grouping:
+
+![Grafana dashboard](docs/grafana-dashboard.png)
+
 ## Running
 
 1. `cp .env.example .env` and fill in only the `PVE01_*` values. Never reuse `.env.dev`; it holds unrelated secrets.
