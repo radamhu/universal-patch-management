@@ -5,8 +5,6 @@ services:
       context: .
       args:
         UPM_UID: ${UPM_UID:-1000}   # must own secrets/id_ed25519 (chmod 600)
-    ports:
-      - "${BIND:-127.0.0.1}:8080:8080"   # set BIND to the LAN IP to expose
     env_file: .env
     read_only: true
     tmpfs:
@@ -24,5 +22,19 @@ services:
       - ./secrets/id_ed25519:/run/secrets/upm_ssh_key:ro
       - ./components.json:/app/components.json:ro
     restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.gzip.compress=true
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.routers.http-0-upm.entryPoints=http
+      - traefik.http.routers.http-0-upm.middlewares=redirect-to-https
+      - traefik.http.routers.http-0-upm.rule=Host(`upm.192.168.0.5.sslip.io`)
+      - traefik.http.routers.http-0-upm.service=http-0-upm
+      - traefik.http.routers.https-0-upm.entryPoints=https
+      - traefik.http.routers.https-0-upm.middlewares=gzip
+      - traefik.http.routers.https-0-upm.rule=Host(`upm.192.168.0.5.sslip.io`)
+      - traefik.http.routers.https-0-upm.tls=true
+      - traefik.http.routers.https-0-upm.service=http-0-upm
+      - traefik.http.services.http-0-upm.loadbalancer.server.port=8080
 volumes:
   upm-data: {}
