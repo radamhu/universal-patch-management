@@ -1,5 +1,5 @@
 services:
-  upm:
+  app:
     init: true
     build:
       context: .
@@ -11,6 +11,14 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
     volumes:
       - upm-data:/data
       - ./secrets/id_ed25519:/run/secrets/upm_ssh_key:ro

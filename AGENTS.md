@@ -12,7 +12,7 @@ a Grafana dashboard via Alloy.
   `store.py`, `models.py`, `config.py`)
 - `tests/` — pytest suite, mirrors `src/upm/` module names (`fakes.py` holds shared test doubles)
 - `components.json` — declares SSH `hosts` and version-check `probes`; see readme.md for the schema
-- `Dockerfile`, `compose.yaml` — container build/run
+- `Dockerfile`, `docker-compose.yml` — container build/run
 - `secrets/id_ed25519` — SSH key mounted into the container; must exist with `chmod 600` before first build
 
 ## Running

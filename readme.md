@@ -1,22 +1,4 @@
-universal-patch-management
-
-Core Infra Components:
-
-- proxmox version AS-IS + latest stable
-- LXC OS version AS-IS + latest stable
-- VM OS version AS-IS + latest stable
-- backup status latest
-
-Application Components:
-
-* LXC APP version AS-IS + latest stable
-* VM APP version AS-IS + latest stable
-* VM docker APP version AS-IS + latest stable
-* backup status latest
-
-Grafana Dashboard
-
-* universal-patch-management send logs to grafana cloud through alloy
+# universal-patch-management
 
 ## Running
 
@@ -42,15 +24,15 @@ Probes are defined in `components.json` under `"probes"`. Each probe has:
 - `cmd` and `regex` (group 1 = version)
 - optional `latest_key`, matching a key under `"sources"`
 
-### Collectors
+## Collectors
 
 Three collectors feed `/status.json`, all producing the same component shape (`version_component` /
 `error_component` / `backup_component`) and resolving "latest" via `sources`:
 
-| Collector | Config | Scope | How it checks |
-|---|---|---|---|
-| `ProxmoxCollector` (`pve.py`) | always runs (needs `PVE01_*` env) | the Proxmox host itself + every guest on the cluster (LXCs + VMs, auto-discovered via `/cluster/resources`) | Proxmox VE version, backup job status, and each job's actual last run all via the Proxmox HTTP API; per-guest OS + docker `ps` via QEMU guest-agent exec (VMs) or `pct exec` (LXCs) |
-| `SshHostCollector` (`ssh_host.py`) | `"hosts"` list | one fixed non-pve host per entry | plain SSH: `cat /etc/os-release` for OS, `docker ps` loop if `docker: true`, optional `backup_cmd` — all hardcoded, nothing to configure per-check |
-| `ProbesCollector` (`probes.py`) | `"probes"` list | whatever you point it at, one probe = one component | arbitrary `cmd` run over SSH or `pct exec`, version pulled out via `regex` group 1 — escape hatch for anything the other two don't cover (e.g. proxmox-ve version check outside pve.py, a non-docker app, one specific LXC's OS) |
+| Collector                              | Config                             | Scope                                                                                                        | How it checks                                                                                                                                                                                                                          |
+| -------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ProxmoxCollector` (`pve.py`)      | always runs (needs`PVE01_*` env) | the Proxmox host itself + every guest on the cluster (LXCs + VMs, auto-discovered via`/cluster/resources`) | Proxmox VE version, backup job status, and each job's actual last run all via the Proxmox HTTP API; per-guest OS + docker`ps` via QEMU guest-agent exec (VMs) or `pct exec` (LXCs)                                                 |
+| `SshHostCollector` (`ssh_host.py`) | `"hosts"` list                   | one fixed non-pve host per entry                                                                             | plain SSH:`cat /etc/os-release` for OS, `docker ps` loop if `docker: true`, optional `backup_cmd` — all hardcoded, nothing to configure per-check                                                                             |
+| `ProbesCollector` (`probes.py`)    | `"probes"` list                  | whatever you point it at, one probe = one component                                                          | arbitrary`cmd` run over SSH or `pct exec`, version pulled out via `regex` group 1 — escape hatch for anything the other two don't cover (e.g. proxmox-ve version check outside pve.py, a non-docker app, one specific LXC's OS) |
 
 Endpoints: `/status.json` (data) and `/healthz` (liveness).
