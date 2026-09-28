@@ -69,3 +69,21 @@ def test_index_html_route(srv):
 def test_traversal_attack(srv):
     _, base = srv
     assert get(base + "/../server.py")[0] == 404
+
+
+def test_metrics_no_data(srv):
+    _, base = srv
+    status, body = get(base + "/metrics")
+    assert status == 200 and body == b""
+
+
+def test_metrics_with_data(srv):
+    store, base = srv
+    store.save({"generated_at": "2026-09-28T12:00:00+00:00", "hosts": {},
+                "components": [{"id": "x:y", "group": "app", "host": "x", "kind": "docker",
+                                 "name": "y", "current": "1.0", "latest": "1.0",
+                                 "status": "ok", "checked_at": "2026-09-28T12:00:00+00:00"}]})
+    status, body = get(base + "/metrics")
+    assert status == 200
+    assert b'upm_component_status{id="x:y"' in body
+    assert b"upm_generated_timestamp_seconds" in body
