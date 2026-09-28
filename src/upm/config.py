@@ -1,10 +1,23 @@
 import json
+import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
 PROBE_REQUIRED = ("id", "name", "kind", "group", "host", "target", "cmd", "regex")
 HOST_REQUIRED = ("id", "user", "address", "docker")
+_ENV_VAR_RE = re.compile(r"\$\{(\w+)\}")
+
+
+def _expand_env(value, env):
+    if isinstance(value, str):
+        return _ENV_VAR_RE.sub(lambda m: env.get(m.group(1), ""), value)
+    if isinstance(value, list):
+        return [_expand_env(v, env) for v in value]
+    if isinstance(value, dict):
+        return {k: _expand_env(v, env) for k, v in value.items()}
+    return value
 
 
 def normalize_pve_host(raw):
@@ -68,11 +81,11 @@ class Components:
     hosts: list = field(default_factory=list)
 
 
-def load_components(path):
+def load_components(path, env=None):
     path = Path(path)
     if not path.exists():
         return Components()
-    raw = json.loads(path.read_text())
+    raw = _expand_env(json.loads(path.read_text()), os.environ if env is None else env)
     probes = raw.get("probes", [])
     for p in probes:
         missing = [k for k in PROBE_REQUIRED if k not in p]

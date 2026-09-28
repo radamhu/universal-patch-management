@@ -6,7 +6,7 @@
     "app:grafana/alloy": {"source": "github_release", "repo": "grafana/alloy"}
   },
   "hosts": [
-    {"id": "oracle", "user": "ubuntu", "address": "158.180.55.49", "docker": true, "backup_cmd": null}
+    {"id": "oracle", "user": "${ORACLE_SSH_USER_1}", "address": "${ORACLE_SSH_HOST_1}", "docker": true, "backup_cmd": null}
   ],
   "probes": []
 }

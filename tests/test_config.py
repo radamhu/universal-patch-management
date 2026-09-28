@@ -66,6 +66,26 @@ def test_load_components_hosts(tmp_path):
     assert len(c.hosts) == 1 and c.hosts[0]["id"] == "oracle"
 
 
+def test_load_components_expands_env_vars(tmp_path):
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps({
+        "hosts": [{"id": "oracle", "user": "${ORACLE_SSH_USER_1}", "address": "${ORACLE_SSH_HOST_1}",
+                   "docker": True, "backup_cmd": None}],
+    }))
+    c = load_components(p, {"ORACLE_SSH_HOST_1": "1.2.3.4", "ORACLE_SSH_USER_1": "ubuntu"})
+    assert c.hosts[0]["address"] == "1.2.3.4" and c.hosts[0]["user"] == "ubuntu"
+
+
+def test_load_components_missing_env_var_expands_empty(tmp_path):
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps({
+        "hosts": [{"id": "oracle", "user": "ubuntu", "address": "${MISSING_VAR}",
+                   "docker": True, "backup_cmd": None}],
+    }))
+    c = load_components(p, {})
+    assert c.hosts[0]["address"] == ""
+
+
 def test_load_components_rejects_bad_host(tmp_path):
     p = tmp_path / "c.json"
     p.write_text(json.dumps({"hosts": [{"id": "oracle"}]}))
