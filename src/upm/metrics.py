@@ -2,15 +2,22 @@ from datetime import datetime
 
 _ESCAPES = str.maketrans({"\\": "\\\\", "\"": "\\\"", "\n": "\\n"})
 
-_LABEL_KEYS = ("id", "group", "host", "kind", "name", "current", "latest", "status")
+_LABEL_KEYS = ("id", "group", "host", "kind", "name", "current", "latest", "status", "stale")
 
 
 def _label_value(v):
     return (v or "").translate(_ESCAPES)
 
 
+def _bool_label_value(v):
+    return "true" if v else "false"
+
+
 def _labels(component):
-    pairs = ",".join(f'{k}="{_label_value(component.get(k))}"' for k in _LABEL_KEYS)
+    pairs = ",".join(
+        f'{k}="{_bool_label_value(component.get(k)) if k == "stale" else _label_value(component.get(k))}"'
+        for k in _LABEL_KEYS
+    )
     return pairs
 
 

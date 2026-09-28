@@ -43,7 +43,10 @@ services:
     tmpfs:
       - /tmp
       - /var/lib/alloy/data
-    env_file: .env
+    environment:
+      GRAFANA_PROM_PUSH_URL: ${GRAFANA_PROM_PUSH_URL}
+      GRAFANA_PROM_USER: ${GRAFANA_PROM_USER}
+      GRAFANA_PROM_TOKEN: ${GRAFANA_PROM_TOKEN}
     volumes:
       - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
     depends_on:
