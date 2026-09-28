@@ -25,7 +25,7 @@ UPM_UID=$(id -u) docker compose up --build -d
 ## Testing
 
 ```
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 pytest
 ```
 
