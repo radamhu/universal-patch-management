@@ -14,6 +14,8 @@ Alloy), mirroring the same Core Infra / Application grouping:
 Dashboard JSON is exported at `docs/grafana-dashboard.json` (source of truth is Grafana Cloud; re-export
 after changes there).
 
+<video src="brag-output/brag.mp4" controls poster="brag-output/brag.jpg" width="640"></video>
+
 ## Running
 
 1. `cp .env.example .env` and fill in only the `PVE01_*` values. Never reuse `.env.dev`; it holds unrelated secrets.

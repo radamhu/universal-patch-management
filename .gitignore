@@ -6,3 +6,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 .superpowers/
+.DS_Store
+brag-output/*
+!brag-output/brag.mp4
+!brag-output/brag.jpg
