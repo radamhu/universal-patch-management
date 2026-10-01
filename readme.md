@@ -14,7 +14,9 @@ Alloy), mirroring the same Core Infra / Application grouping:
 Dashboard JSON is exported at `docs/grafana-dashboard.json` (source of truth is Grafana Cloud; re-export
 after changes there).
 
-[![Patch Status demo video](brag-output/brag.jpg)](brag-output/brag.mp4)
+![Patch Status demo](brag-output/brag.gif)
+
+Full video with narration/sound: [brag-output/brag.mp4](brag-output/brag.mp4)
 
 ## Running
 
